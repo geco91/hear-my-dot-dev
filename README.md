@@ -2,90 +2,89 @@
 
 # Hear My Dot
 
-A small, independently written Chrome Manifest V3 prototype: when an unmuted tab on **chatgpt.com** reports audio activity, playing YouTube videos and Podverse media in the same Chrome profile are paused and other tabs are muted. All ChatGPT tabs are exempt, regardless of their URL path. After **10 seconds of silence**, configurable from 10 to 20 seconds, the extension resumes only videos it paused itself and restores only its own mute changes. Saved custom quiet-period values are preserved when updating. Tabs that were already muted stay muted; manual changes take priority.
+**A little room to listen.**
 
-## Status and scope
+When ChatGPT speaks, Hear My Dot gives it room: it pauses supported YouTube and Podverse media and mutes other browser tabs. After ChatGPT audio stops, it waits through a short quiet period before restoring its own changes.
 
-A local proof of concept with isolated baseline tests. It has **not yet been installed or functionally tested in Chrome**. Repository: https://github.com/geco91/hear-my-dot — public source code under the MIT License, with publication explicitly authorized. There is no Chrome Web Store release, CI, Native Helper, microphone detection, audio recording, or cross-profile control. Pause/resume support is limited to YouTube and Podverse.
+**Your playback stays yours.** Media that was already paused stays paused, tabs that were already muted stay muted, and manual changes take priority. ChatGPT tabs are always exempt.
 
-`extension/` contains the loadable extension; `tests/` contains the small test suite. No package installation is required. From the repository root, run the baseline and media-adapter/controller/integration tests with Node.js:
+## Install in Chrome
+
+You need Chrome 120 or later. No build step, Node.js, or package installation is needed to use the extension.
+
+1. On this repository's GitHub page, choose **Code → Download ZIP**, then extract the ZIP to a folder you will keep. If you already cloned the repository, use that checkout instead.
+2. In the Chrome profile where you use ChatGPT and your media tabs, open `chrome://extensions` and turn on **Developer mode**.
+3. Click **Load unpacked** and select the **`extension/` folder inside the extracted repository**. This is the folder containing `manifest.json`; do not select the repository root or `diagnostics/headset-probe/`.
+4. Refresh any YouTube and Podverse tabs that were already open so their media controls can load.
+5. Pin **Hear My Dot** from Chrome's extensions menu. Click its icon to open settings.
+
+Keep the extracted folder in place: Chrome loads the extension from it. This is a local unpacked prototype, not a Chrome Web Store installation. It controls tabs in the same Chrome profile; incognito mode is not supported.
+
+## Make room for ChatGPT audio
+
+In settings, turn on **Prioritize ChatGPT audio**, choose a **Quiet period**, and click **Save settings**. Audio priority is on by default, with a 10-second quiet period. You can choose 10–20 seconds; saved values are kept when updating.
+
+When an unmuted `chatgpt.com` tab produces audio:
+
+- Supported **YouTube videos and Podverse audio/video pause**.
+- **Other tabs are muted**. Muting is also the fallback when a supported page's media script is unavailable or pausing fails. Podverse also uses this fallback when no accessible player is found.
+- After ChatGPT audio stops, the **quiet period** gives short pauses room before playback returns. New ChatGPT audio restarts the wait.
+- Hear My Dot **resumes only media it paused** and **undoes only its own mute changes**.
+
+The trigger is Chrome's audio activity indicator, not speech recognition. Any audio from ChatGPT can trigger focus; an open but silent call or microphone permission alone does not. Chrome's audio indicator can linger, and browser or device sleep can delay restoration, so the quiet period is a timing target.
+
+## See what is happening
+
+The toolbar icon opens settings; it does not toggle audio priority directly. Its shape, badge, and tooltip show the current state.
+
+| Badge | State | Meaning |
+| --- | --- | --- |
+| None | Ready | Waiting for ChatGPT audio. |
+| `ON` | Active | ChatGPT audio has triggered audio priority. |
+| `WAIT` | Waiting | The quiet period is running, or the extension is retrying its own mute restoration. |
+| `OFF` | Disabled | Audio priority is switched off in settings. |
+
+`WAIT` can remain visible while restoration is pending, even after you turn off audio priority. The tooltip explains the state; the icon does not guarantee audible speaker output.
+
+## Your playback stays yours
+
+Automatic resume is deliberately cautious. It applies only to the same still-paused media element, source, and page that Hear My Dot paused. Playback, seeking, volume or speed changes, navigation, and player replacement can cancel automatic resume. A direct click, touch, or keypress on a supported media page also cancels its automatic pause/resume control for the current focus period.
+
+If media stays paused after an interaction, resume it yourself. Chrome may also block automatic playback; Hear My Dot makes one resume attempt and does not retry it. Reloading the media page or extension clears ownership of paused media, so it will not automatically resume those old pauses.
+
+Pause/resume supports top-level pages on `youtube.com`, `www.youtube.com`, `m.youtube.com`, and `podverse.fm` over HTTPS. YouTube Music and YouTube embeds on other sites use tab muting instead. Embedded players, inaccessible players, and site changes can limit media control. Manual overrides do not trigger fallback muting of the playback you chose.
+
+## Update
+
+The unpacked extension does not update automatically.
+
+1. Open Hear My Dot settings, turn off **Prioritize ChatGPT audio**, click **Save settings**, and wait for its changes to be restored.
+2. Update the files:
+   - **Git checkout:** in your repository folder, run `git pull --ff-only` on the branch that tracks your intended upstream.
+   - **ZIP download:** download and extract a fresh ZIP. Replace the contents of the `extension/` folder you previously loaded in Chrome with the contents of the new ZIP’s `extension/` folder. Copy into that existing `extension/` folder, not the repository root.
+3. Open `chrome://extensions` and click **Reload** on Hear My Dot. Review any permission prompt Chrome shows.
+4. Refresh your existing YouTube and Podverse tabs, then re-enable audio priority in settings and save.
+
+Before removing the extension or disabling it in Chrome, follow step 1 as well. Once removed or disabled in Chrome, it cannot finish restoring its changes.
+
+## Privacy and permissions
+
+Hear My Dot does not record audio or use your microphone. Settings are stored locally, and it does not persist browsing history or tab/media URLs. Media URLs are held in memory only while the extension owns a pause. The extension makes no network requests of its own.
+
+It uses `storage` for settings and focus state, `alarms` for restoration, and access to ChatGPT, YouTube, and Podverse hosts to detect eligible tabs and run the supported media controls. It does not request the broad `tabs` permission. There is no native helper or control of other Chrome profiles.
+
+## Development and test status
+
+This is an independently written Manifest V3 prototype, currently version **0.3.1**. The extension is already in use, and the repository includes automated tests. A complete, reproducible browser end-to-end acceptance test has not been established here. YouTube ads, live streams, Shorts, the deployed Podverse player, manual-control races, and sleep/wake behavior still need real-browser testing.
+
+The loadable extension lives in [`extension/`](extension/); automated tests live in [`tests/`](tests/). Developers with Node.js can run them from the repository root without installing packages:
 
 ```sh
 node --test tests/*.test.mjs
 ```
 
-## YouTube pause/resume
-
-Supported top-level pages are `https://youtube.com/*`, `https://www.youtube.com/*`, and `https://m.youtube.com/*`. The extension pauses currently playing HTML video elements, including videos that start during the focus period. Already paused or ended videos are never automatically started. Other sites, YouTube embeds on other sites, and YouTube Music keep the existing mute/restore behavior.
-
-Only the same still-paused video element, media source, and page can be resumed. Manual playback, seeking, volume/rate changes, navigation, or replacing the video cancels automatic restoration. As a conservative safeguard, any direct click/touch or keypress on the YouTube page cancels pause ownership and further automatic pauses for the current focus period. A cancelled video may therefore remain paused; resume it manually. Site-generated playback/media changes can also cancel restoration.
-
-A rejected `play()` call is caught and logged as a warning in the YouTube page's console. There is no automatic retry; resume manually if Chrome blocks playback. Pause ownership lives in the page's isolated content script and survives service-worker restarts, but not a page or extension reload. After a reload, a paused video is never assumed to belong to the extension. YouTube ads, live streams, Shorts, player changes, and browser suspension still need real-browser testing.
-
-## Podverse pause/resume
-
-Version 0.3.0 adds a small, independently written adapter for top-level `https://podverse.fm/*` pages. It uses standard HTML `audio` and `video` elements and the same ownership safeguards as the YouTube adapter. Only media that was playing and successfully paused by this extension can be resumed. Previously paused media stays paused. Direct page interactions, seeking, media changes, episode/source replacement, and navigation forfeit automatic resume for the current focus period. A rejected `play()` is caught and reported in the page console without retrying.
-
-If the content script is unavailable, no accessible media element is found, or pausing fails, the existing tab mute/restore behavior is used. When a player appears later, the adapter wakes the worker to reassess the fallback. Manual/source-change cancellation is respected as an override; it does not trigger fallback muting of the user's new playback. This adapter does not control cross-origin frames, closed shadow roots, detached players, Web Audio-only playback, subdomains, or other profiles.
-
-Official sources reviewed: [Podverse's web-app description](https://github.com/podverse/podverse-web) documents audio, video and livestream playback; [Podverse About](https://podverse.fm/about) describes the service. The repository identifies its own license as AGPL-3.0. No Podverse implementation code or assets were copied or bundled; this extension's original adapter uses standard browser media APIs. The deployed player DOM and end-to-end playback have **not** been verified in Chrome. A deeper source-tree API inspection was unavailable in this environment, so this is a guarded adapter with a mute fallback, not a claim of complete Podverse compatibility.
-
-## Toolbar status
-
-Pin Hear My Dot from Chrome's extensions menu to see its static toolbar icon. Clicking it opens the options. Status is shown with shape, contrast, a short badge, and an accessible tooltip, not color alone:
-
-| Icon | State | Meaning |
-| --- | --- | --- |
-| Slashed dot/waves, gray (`OFF`) | Disabled | Focus is switched off in the options. |
-| Dot with one wave, navy | Ready | Waiting for ChatGPT output-audio activity. |
-| Dot with two waves, teal (`ON` or `WAIT`) | Active prioritization | `ON` means the priority period is active. `WAIT` includes the quiet period or pending restoration. |
-
-During the quiet period the tooltip says that prioritization is still active and shows the configured delay target; it does not claim ChatGPT is speaking. The icon describes the focus state, not the number of tabs changed or guaranteed speaker output. Restoration pending takes precedence over the disabled label when a mute restoration must be retried. Icons and the README header are original static artwork; no animation or external brand assets are used.
-
-## Updating to 0.3.1
-
-1. Before reloading an older version, disable focus through the extension's options and wait for its changes to be restored.
-2. Run `git pull --ff-only` in your local repository to update the files, then reload the unpacked extension in `chrome://extensions`. Review any Chrome permission prompt yourself. Version 0.3.0 adds access to **podverse.fm** for its pause/resume content script. Version 0.2.0 already added **youtube.com, www.youtube.com, and m.youtube.com**. These permissions identify the supported tabs and allow their media elements to be controlled. It does not add the `scripting` or broad `tabs` permission.
-3. Refresh existing YouTube and Podverse tabs to load the new content scripts. Until a script can respond, the extension uses the original mute/restore fallback for that tab.
-4. Re-enable focus in the options. The default is now ten seconds when no value has been saved; an explicitly saved value such as twenty seconds remains unchanged. You can change it in the options.
-
-The local unpacked extension does not update automatically. No browser installation or permission acceptance has been performed on your behalf.
-
-## Architecture and limitations
-
-- `tabs.onUpdated` and a fresh tab query detect audio activity. Chrome's `audible` flag indicates recently produced sound; it is **not speech recognition** and does not guarantee physically audible speaker output. An open call or granted microphone permission alone does not trigger muting. Any type of audio on chatgpt.com can trigger it; Chrome's own short trailing delay adds to the configured quiet period.
-- The service worker serializes state changes. Each tab is read again before any mutation. State in `storage.session` survives worker restarts; `mutedInfo.extensionId` limits restoration to the extension's own changes and allows recovery after state loss. Closed tabs are removed from tracking, and discarded or frozen ChatGPT tabs do not count as active audio sources. Navigating to ChatGPT releases a mute applied by this extension.
-- A timer and an alarm support restoration. **10–20 seconds is a target, not a real-time guarantee**: worker suspension, browser or device sleep, and alarm throttling can delay restoration. Chrome does not support an atomic combination of a tab query and a mute update; near-simultaneous manual changes remain a case for practical testing.
-- Permissions: `storage`, `alarms`, and URL visibility for `https://chatgpt.com/*`. YouTube and Podverse host access and top-frame content scripts are also declared for the hosts listed above. No broad `tabs` read permission or extension-initiated network requests. Incognito mode is disabled. Settings are stored locally; audio and browsing history are not stored, and tab/media URLs are not persisted. Each media controller retains the current page and media source in memory only while it owns a pause.
-- The original cross-profile idea has been deferred. It would require investigating coordinated extension instances and possibly a local Native Messaging broker. A helper alone does not gain access to Chrome tabs across profiles. That is beyond the scope of this proof of concept.
-
-## Future manual test — only after approval
-
-In a separate test profile, load `extension/` as an unpacked extension. Open two ChatGPT tabs and two other audio tabs; mute one of the other tabs beforehand. An open but silent call must not change anything. When ChatGPT produces audio, other tabs outside the supported media adapters must be muted while both ChatGPT tabs remain exempt. Short pauses must not trigger restoration; after the quiet period, only the previously audible tab should be unmuted. Then test manual mute/unmute, new tabs, navigation, closing the audio source tab, worker restarts, and sleep/wake behavior. Also test YouTube: a playing video should pause and resume after the quiet period, while a previously paused video stays paused. During focus, try manual play/pause, seeking, keyboard/media controls, navigation to another video, replacing the player, and switching away and back. Verify cancellation, a blocked autoplay attempt, repeated ChatGPT audio, saved custom delays, and the mute fallback before refreshing an existing YouTube tab. For Podverse, repeat these checks with a playing episode and an already-paused episode, episode/source changes, player replacement, a late-loading player, playback denial, and a missing/uncontrollable player using mute fallback. Before removing the extension, turn it off through its options and wait for restoration: a removed or browser-disabled extension can no longer run restoration code.
+An optional, separate [headset command diagnostic](diagnostics/headset-probe/README.txt) is available for inspecting shortcut bindings and received commands. It is not required for Hear My Dot and does not add a background-toggle mode to the main extension.
 
 ## Origin and license
 
-Original, independently written code under the MIT License; see [LICENSE](LICENSE). Functional inspiration comes from [FrancisGregori/audio-tab-finder](https://github.com/FrancisGregori/audio-tab-finder). This is not a fork, and no code or assets were copied from that project. Its license was not used as a basis for reuse.
-
-## Technical references
-
-- [Chrome Tabs API](https://developer.chrome.com/docs/extensions/reference/api/tabs): audio indicator, `MutedInfo`, and tab events.
-- [Chrome Storage API](https://developer.chrome.com/docs/extensions/reference/api/storage): session state for service workers.
-- [Chrome Alarms API](https://developer.chrome.com/docs/extensions/reference/api/alarms): delayed execution and device sleep.
-- [Native Messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging): possible future coordination, not implemented here.
-
-- [Chrome Content Scripts](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts): isolated execution and static content-script declarations.
-
-## Optional headset command diagnostic
-
-A separate, opt-in test extension lives in [`diagnostics/headset-probe/`](diagnostics/headset-probe/README.txt). It reports actual shortcut bindings and received extension commands without controlling media. It has no permissions, host access, default key assignments, global shortcuts, microphone access, network requests, or permanent logs.
-
-After `git pull --ff-only`, use **Load unpacked** in `chrome://extensions` and select **`diagnostics/headset-probe/`**, not the main `extension/` directory. Open the probe via its own extension icon. Follow its instructions to assign one intended media key manually under `chrome://extensions/shortcuts`, keep scope **In Chrome**, refresh the binding display, and test your actual headset. Remove the test binding and probe afterwards; a manually assigned probe key may replace normal player control while assigned.
-
-Single/double/long presses must be observed on the real hardware. `commands.onCommand` does not expose raw keydown/keyup, press duration, or headset identity. Missing events or empty bindings do not identify the cause of a routing/conflict problem. The main plugin remains version 0.3.1; no background-toggle mode is included in this diagnostic release.
-
-Run the isolated probe checks with:
-
-```sh
-node --test diagnostics/headset-probe/tests/*.test.mjs
-```
+Original, independently written code under the [MIT License](LICENSE). Functional inspiration comes from [FrancisGregori/audio-tab-finder](https://github.com/FrancisGregori/audio-tab-finder). This is not a fork; no code or assets were copied from that project. No Podverse implementation code or assets are bundled. The header and toolbar icons are original artwork.
